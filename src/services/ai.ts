@@ -19,7 +19,7 @@ export async function parseTransaction(userInput: string) {
             }]
         });
 
-        const responseText = response.text;
+        const responseText:any = response.text;
         const cleanJson = responseText.replace(/```json|```/g, "").trim();
         return JSON.parse(cleanJson);
     } catch (error) {
