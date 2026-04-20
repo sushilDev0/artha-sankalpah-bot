@@ -84,7 +84,7 @@ async function connectToWhatsapp() {
 
     if (data && !data.error) {
         const sender = msg.key.remoteJid!;
-        const reply = `✅ *Recorded to Artha Sankalpah*\n\n` +
+        const reply = `✅ *Recorded to Artha-Sankalpah bot *\n\n` +
                       `💰 *Amount:* ₹${data.amount}\n` +
                       `📂 *Category:* ${data.category}\n` +
                       `📝 *Note:* ${data.note}\n` +
