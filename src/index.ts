@@ -1,9 +1,12 @@
+import './config/dns';
+import {connectDB} from './config/db';
 import { parseTransaction } from './services/ai';
 import makeWASocket, { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, delay } from "@whiskeysockets/baileys";
 import { Boom } from '@hapi/boom';
 import pino from "pino";
 import * as dotenv from 'dotenv';
 dotenv.config();
+connectDB();
 console.log("Checking .env Number found:", process.env.MY_NUMBER);
 const phoneNumber = process.env.MY_NUMBER;
 
