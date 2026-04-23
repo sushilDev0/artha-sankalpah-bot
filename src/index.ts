@@ -1,18 +1,25 @@
 import './config/dns';
-import {connectDB} from './config/db';
+import { connectDB } from './config/db';
 import { parseTransaction } from './services/ai';
-import makeWASocket, { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, delay } from "@whiskeysockets/baileys";
+import { Transaction } from './models/Transaction';
+import makeWASocket, { 
+    DisconnectReason, 
+    useMultiFileAuthState, 
+    fetchLatestBaileysVersion, 
+    delay 
+} from "@whiskeysockets/baileys";
 import { Boom } from '@hapi/boom';
 import pino from "pino";
 import * as dotenv from 'dotenv';
+
 dotenv.config();
+
+// Connect to MongoDB Atlas
 connectDB();
-console.log("Checking .env Number found:", process.env.MY_NUMBER);
+
 const phoneNumber = process.env.MY_NUMBER;
 
-
 async function connectToWhatsapp() {
-
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     const { version } = await fetchLatestBaileysVersion();
 
@@ -24,79 +31,98 @@ async function connectToWhatsapp() {
         browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
-
     if (!sock.authState.creds.registered) {
         if (!phoneNumber) {
-            console.error("❌ ERROR: MY_NUMBER not found in .env file!");
+            console.error("❌ ERROR: MY_NUMBER not found in .env!");
             process.exit(1);
         }
-
         await delay(3000);
         const code = await sock.requestPairingCode(phoneNumber);
-        console.log(`\n 🔥 YOUR ARTHA SANKALPAH PAIRING CODE:${code}\n`);
-        console.log(`➡️ Steps : Open WhatsApp -> Settings -> Linked Devices -> Link with phone number instead \n`);
-
+        console.log(`\n 🔥 YOUR PAIRING CODE: ${code}\n`);
     }
-
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
-
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log(`♻️ Connection lost. Reconnectiong ... `, shouldReconnect);
             if (shouldReconnect) connectToWhatsapp();
-
         } else if (connection === "open") {
-            console.log(`✅ SUCCESS! Artha Sankalpah is now linked to your WhatsApp.`);
-
+            console.log(`✅ SUCCESS! Artha Sankalpah is linked.`);
         }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('messages.upsert', async ({ messages }) => {
-    const msg = messages[0];
-    
-    // 1. Basic checks: Is there a message? Is it a broadcast/status?
-    if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
+        const msg = messages[0];
+        if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
 
-    // 2. Extract text from various message types
-    const text = msg.message.conversation || 
-                 msg.message.extendedTextMessage?.text || 
-                 msg.message.imageMessage?.caption || '';
+        const text = msg.message.conversation || 
+                     msg.message.extendedTextMessage?.text || 
+                     msg.message.imageMessage?.caption || '';
 
-    // 3. THE LOOP KILLER: 
-    // If the message starts with our specific Emoji or Header, EXIT immediately.
-    if (text.startsWith('✅') || text.includes('Artha Sankalpah')) {
-        return; 
-    }
+        if (text.startsWith('✅') || text.includes('Artha-Sankalpah') || text.startsWith('🤔')) return;
+        if (!/\d+/.test(text)) return;
 
-    // 4. PRE-FILTER: Only send to AI if the message contains a number.
-    // This saves your 5-request-per-minute quota!
-    const containsNumber = /\d+/.test(text);
-    if (!containsNumber) {
-        console.log("Empty or non-financial message. Skipping AI.");
-        return;
-    }
+        console.log(`📩 Processing: ${text}`);
 
-    console.log(`📩 Processing valid expense: ${text}`);
+        try {
+            const result = await parseTransaction(text);
+            const transactions = Array.isArray(result) ? result : [result];
+            const sender = msg.key.remoteJid!;
+            
+            let totalIncome = 0;
+            let totalOutflow = 0;
+            const savedItems: string[] = [];
 
-    // 5. Call Gemini
-    const data = await parseTransaction(text);
+            // 1. Process and Save
+            for (const item of transactions) {
+                if (item && !item.error) {
+                    const type = (item.type || 'expense').toLowerCase();
+                    const amount = Number(item.amount);
 
-    if (data && !data.error) {
-        const sender = msg.key.remoteJid!;
-        const reply = `✅ *Recorded to Artha-Sankalpah bot *\n\n` +
-                      `💰 *Amount:* ₹${data.amount}\n` +
-                      `📂 *Category:* ${data.category}\n` +
-                      `📝 *Note:* ${data.note}\n` +
-                      `⚖️ *Type:* ${data.type.toUpperCase()}`;
-        
-        await sock.sendMessage(sender, { text: reply });
-    }
-});
+                    const newEntry = new Transaction({
+                        amount: amount,
+                        category: (item.category || 'personal').toLowerCase(),
+                        description: item.note || text,
+                        type: type
+                    });
 
+                    await newEntry.save();
+                    savedItems.push(`• ₹${amount} (${item.category})`);
+
+                    // Track totals for the current message
+                    if (type === 'income') {
+                        totalIncome += amount;
+                    } else {
+                        totalOutflow += amount;
+                    }
+                }
+            }
+
+            // 2. Send Primary Confirmation
+            if (savedItems.length > 0) {
+                const reply = `✅ *Artha-Sankalpah Bot*\n\n` +
+                              `Successfully logged:\n${savedItems.join('\n')}\n\n` +
+                              `📊 _Data synced to Atlas._`;
+                
+                await sock.sendMessage(sender, { text: reply });
+
+                // 3. THE AUDIT LOGIC: Check for "Leaked" money
+                const balance = totalIncome - totalOutflow;
+
+                if (totalIncome > 0 && balance > 0) {
+                    await delay(1500); // Small pause for a more natural feel
+                    const auditMessage = `🤔 *Wait, Specialist!* You logged ₹${totalIncome} income but only ₹${totalOutflow} in spending/savings.\n\n*₹${balance} is missing.* Did you spend it on tea, petrol, or something else?`;
+                    
+                    await sock.sendMessage(sender, { text: auditMessage });
+                }
+            }
+
+        } catch (error: any) {
+            console.error("❌ Process Error:", error.message);
+        }
+    });
 }
 
 connectToWhatsapp();
