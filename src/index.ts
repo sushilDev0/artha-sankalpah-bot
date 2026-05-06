@@ -17,8 +17,7 @@ connectDB();
 
 const phoneNumber = process.env.MY_NUMBER;
 
-// --- Helper Function for Audit Math ---
-async function getMissingBalance() {
+async function getTodayStats() {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
@@ -28,8 +27,8 @@ async function getMissingBalance() {
     ]);
 
     const income = stats.find(s => s._id === 'income')?.total || 0;
-    const outflow = stats.find(s => s._id === 'expense')?.total || 0;
-    return income - outflow;
+    const expense = stats.find(s => s._id === 'expense')?.total || 0;
+    return { income, expense, balance: income - expense };
 }
 
 async function connectToWhatsapp() {
@@ -56,94 +55,119 @@ async function connectToWhatsapp() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
+   sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0];
+    if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
 
-        const text = msg.message.conversation || 
-                     msg.message.extendedTextMessage?.text || 
-                     msg.message.imageMessage?.caption || '';
+    const sender = msg.key.remoteJid!;
+    const isMe = msg.key.fromMe || sender.split('@')[0] === process.env.MY_NUMBER;
+    if (!isMe) return;
 
-        if (text.startsWith('✅') || text.includes('Artha-Sankalpah') || text.startsWith('🤔')) return;
+    const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
 
-        const sender = msg.key.remoteJid!;
-        const containsNumber = /\d+/.test(text);
+    // 1. Status Command (No AI needed)
+    if (text.toLowerCase() === '!status') {
+        const { income, expense, balance } = await getTodayStats();
+        await sock.sendMessage(sender, { 
+            text: `📊 *Today's Ledger*\n\n💰 Income: ₹${income}\n💸 Utilized: ₹${expense}\n🏁 Leftover: ₹${balance}` 
+        });
+        return;
+    }
 
-        try {
-            // --- NEW: SMART LISTENER LOGIC ---
-            if (!containsNumber) {
-                const missing = await getMissingBalance();
-                
-                if (missing > 0) {
-                    console.log(`🧠 Context: Explaining missing ₹${missing}`);
-                    // Use Gemini to categorize the text reply
-                    const data = await parseTransaction(`The missing ${missing} was for ${text}`);
-                    
-                    const auditEntry = new Transaction({
-                        amount: missing,
-                        category: (data.category || 'personal').toLowerCase(),
-                        description: `Audit: ${text}`,
-                        type: 'expense'
-                    });
-                    await auditEntry.save();
-                    
-                    await sock.sendMessage(sender, { 
-                        text: `✅ Got it! Logged the remaining *₹${missing}* as *${data.category}*. Your daily balance is now matched! 🎯` 
-                    });
-                    return;
-                }
-                // If no number and no missing balance, ignore the message
-                return;
+    // 2. Filter: Only process if there's a number and it's not a short code
+    if (!/\d+/.test(text) || text.length < 3) return;
+
+    try {
+        // AI Call - Ensure parseTransaction handles the WHOLE string at once
+        const result = await parseTransaction(text);
+        if (!result || (Array.isArray(result) && result.length === 0)) return;
+
+        const transactions = Array.isArray(result) ? result : [result];
+        
+        // Use Promise.all to save everything to MongoDB in parallel (Faster)
+        await Promise.all(transactions.map(async (item) => {
+            if (item && !item.error && item.amount > 0) {
+                return new Transaction({
+                    amount: Number(item.amount),
+                    category: (item.category || 'personal').toLowerCase(),
+                    description: item.note || text,
+                    type: (item.type || 'expense').toLowerCase(),
+                    date: new Date()
+                }).save();
             }
+        }));
 
-            // --- REGULAR TRANSACTION LOGIC (With Numbers) ---
-            console.log(`📩 Processing: ${text}`);
-            const result = await parseTransaction(text);
-            const transactions = Array.isArray(result) ? result : [result];
-            
-            let totalIncome = 0;
-            let totalOutflow = 0;
-            const savedItems: string[] = [];
+        const updated = await getTodayStats();
+        const reply = `✅ *Recorded.*\n\nToday's Total Utilized: *₹${updated.expense}*\nRemaining Balance: *₹${updated.balance}*`;
+        
+        await sock.sendMessage(sender, { text: reply });
 
-            for (const item of transactions) {
-                if (item && !item.error) {
-                    const type = (item.type || 'expense').toLowerCase();
-                    const amount = Number(item.amount);
-
-                    const newEntry = new Transaction({
-                        amount: amount,
-                        category: (item.category || 'personal').toLowerCase(),
-                        description: item.note || text,
-                        type: type
-                    });
-
-                    await newEntry.save();
-                    savedItems.push(`• ₹${amount} (${item.category})`);
-
-                    if (type === 'income') totalIncome += amount;
-                    else totalOutflow += amount;
-                }
-            }
-
-            if (savedItems.length > 0) {
-                await sock.sendMessage(sender, { 
-                    text: `✅ *Artha-Sankalpah Bot*\n\nLogged:\n${savedItems.join('\n')}\n\n📊 _Synced to Atlas._` 
-                });
-
-                // Check Daily Balance (not just message balance)
-                const totalMissing = await getMissingBalance();
-
-                if (totalMissing > 0) {
-                    await delay(1500);
-                    const auditMessage = `🤔 *Wait, Specialist!* After this update, you still have *₹${totalMissing}* missing from your daily total. \n\nDid you spend that on tea or something else?`;
-                    await sock.sendMessage(sender, { text: auditMessage });
-                }
-            }
-
-        } catch (error: any) {
+    } catch (error: any) {
+        // If Gemini hits a rate limit (429), catch it here
+        if (error.message.includes('429')) {
+            console.error("⚠️ AI Rate Limit Hit");
+            await sock.sendMessage(sender, { text: "⏳ AI is busy. Please wait a minute before logging again." });
+        } else {
             console.error("❌ Process Error:", error.message);
         }
-    });
+    }
+});sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0];
+    if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
+
+    const sender = msg.key.remoteJid!;
+    const isMe = msg.key.fromMe || sender.split('@')[0] === process.env.MY_NUMBER;
+    if (!isMe) return;
+
+    const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
+
+    // 1. Status Command (No AI needed)
+    if (text.toLowerCase() === '!status') {
+        const { income, expense, balance } = await getTodayStats();
+        await sock.sendMessage(sender, { 
+            text: `📊 *Today's Ledger*\n\n💰 Income: ₹${income}\n💸 Utilized: ₹${expense}\n🏁 Leftover: ₹${balance}` 
+        });
+        return;
+    }
+
+    // 2. Filter: Only process if there's a number and it's not a short code
+    if (!/\d+/.test(text) || text.length < 3) return;
+
+    try {
+        // AI Call - Ensure parseTransaction handles the WHOLE string at once
+        const result = await parseTransaction(text);
+        if (!result || (Array.isArray(result) && result.length === 0)) return;
+
+        const transactions = Array.isArray(result) ? result : [result];
+        
+        // Use Promise.all to save everything to MongoDB in parallel (Faster)
+        await Promise.all(transactions.map(async (item) => {
+            if (item && !item.error && item.amount > 0) {
+                return new Transaction({
+                    amount: Number(item.amount),
+                    category: (item.category || 'personal').toLowerCase(),
+                    description: item.note || text,
+                    type: (item.type || 'expense').toLowerCase(),
+                    date: new Date()
+                }).save();
+            }
+        }));
+
+        const updated = await getTodayStats();
+        const reply = `✅ *Recorded.*\n\nToday's Total Utilized: *₹${updated.expense}*\nRemaining Balance: *₹${updated.balance}*`;
+        
+        await sock.sendMessage(sender, { text: reply });
+
+    } catch (error: any) {
+        // If Gemini hits a rate limit (429), catch it here
+        if (error.message.includes('429')) {
+            console.error("⚠️ AI Rate Limit Hit");
+            await sock.sendMessage(sender, { text: "⏳ AI is busy. Please wait a minute before logging again." });
+        } else {
+            console.error("❌ Process Error:", error.message);
+        }
+    }
+});
 }
 
 connectToWhatsapp();
