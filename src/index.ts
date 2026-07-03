@@ -5,17 +5,15 @@ import { Transaction } from './models/Transaction';
 import makeWASocket, { 
     DisconnectReason, 
     useMultiFileAuthState, 
-    fetchLatestBaileysVersion, 
-    delay 
+    fetchLatestBaileysVersion 
 } from "@whiskeysockets/baileys";
 import { Boom } from '@hapi/boom';
+import qrcode from 'qrcode-terminal';
 import pino from "pino";
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 connectDB();
-
-const phoneNumber = process.env.MY_NUMBER;
 
 async function getTodayStats() {
     const startOfDay = new Date();
@@ -38,136 +36,124 @@ async function connectToWhatsapp() {
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
         browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+
+        // Manually render the QR code since Baileys removed automatic printing
+        if (qr) {
+            console.log("\n📷 SCAN THIS QR CODE WITH YOUR WHATSAPP:");
+            qrcode.generate(qr, { small: true });
+        }
+
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) connectToWhatsapp();
+            if (shouldReconnect) {
+                console.log("🔄 Reconnecting to WhatsApp...");
+                connectToWhatsapp();
+            }
         } else if (connection === "open") {
-            console.log(`✅ SUCCESS! Artha Sankalpah is linked.`);
+            console.log(`\n✅ SUCCESS! Artha Sankalpah is linked.`);
         }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-   sock.ev.on('messages.upsert', async ({ messages }) => {
-    const msg = messages[0];
-    if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
+    // Single unified message event listener
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        // 1. Only process real-time incoming messages, ignore historical sync loops
+        if (type !== 'notify') return; 
 
-    const sender = msg.key.remoteJid!;
-    const isMe = msg.key.fromMe || sender.split('@')[0] === process.env.MY_NUMBER;
-    if (!isMe) return;
+        const msg = messages[0];
+        if (!msg?.message || msg.key.remoteJid === 'status@broadcast') return;
 
-    const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
-
-    // 1. Status Command (No AI needed)
-    if (text.toLowerCase() === '!status') {
-        const { income, expense, balance } = await getTodayStats();
-        await sock.sendMessage(sender, { 
-            text: `📊 *Today's Ledger*\n\n💰 Income: ₹${income}\n💸 Utilized: ₹${expense}\n🏁 Leftover: ₹${balance}` 
-        });
-        return;
-    }
-
-    // 2. Filter: Only process if there's a number and it's not a short code
-    if (!/\d+/.test(text) || text.length < 3) return;
-
-    try {
-        // AI Call - Ensure parseTransaction handles the WHOLE string at once
-        const result = await parseTransaction(text);
-        if (!result || (Array.isArray(result) && result.length === 0)) return;
-
-        const transactions = Array.isArray(result) ? result : [result];
-        
-        // Use Promise.all to save everything to MongoDB in parallel (Faster)
-        await Promise.all(transactions.map(async (item) => {
-            if (item && !item.error && item.amount > 0) {
-                return new Transaction({
-                    amount: Number(item.amount),
-                    category: (item.category || 'personal').toLowerCase(),
-                    description: item.note || text,
-                    type: (item.type || 'expense').toLowerCase(),
-                    date: new Date()
-                }).save();
-            }
-        }));
-
-        const updated = await getTodayStats();
-        const reply = `✅ *Recorded.*\n\nToday's Total Utilized: *₹${updated.expense}*\nRemaining Balance: *₹${updated.balance}*`;
-        
-        await sock.sendMessage(sender, { text: reply });
-
-    } catch (error: any) {
-        // If Gemini hits a rate limit (429), catch it here
-        if (error.message.includes('429')) {
-            console.error("⚠️ AI Rate Limit Hit");
-            await sock.sendMessage(sender, { text: "⏳ AI is busy. Please wait a minute before logging again." });
-        } else {
-            console.error("❌ Process Error:", error.message);
+        // 2. Safety Check: Skip messages that are older than 60 seconds (prevents catch-up loops)
+        const messageTimestamp = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
+        if (Date.now() - messageTimestamp > 60000) {
+            return; 
         }
-    }
-});sock.ev.on('messages.upsert', async ({ messages }) => {
-    const msg = messages[0];
-    if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
 
-    const sender = msg.key.remoteJid!;
-    const isMe = msg.key.fromMe || sender.split('@')[0] === process.env.MY_NUMBER;
-    if (!isMe) return;
+        const sender = msg.key.remoteJid!;
+        const text = (
+            msg.message.conversation || 
+            msg.message.extendedTextMessage?.text || 
+            msg.message.imageMessage?.caption || 
+            ''
+        ).trim();
 
-    const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
+        if (!text) return;
 
-    // 1. Status Command (No AI needed)
-    if (text.toLowerCase() === '!status') {
-        const { income, expense, balance } = await getTodayStats();
-        await sock.sendMessage(sender, { 
-            text: `📊 *Today's Ledger*\n\n💰 Income: ₹${income}\n💸 Utilized: ₹${expense}\n🏁 Leftover: ₹${balance}` 
-        });
-        return;
-    }
+        // --- BULLETPROOF IDENTITY DETECTOR ---
+        const cleanEnvNumber = (process.env.MY_NUMBER || '').replace(/\D/g, '');
+        const cleanSenderNumber = sender.split('@')[0].split(':')[0].replace(/\D/g, '');
+        const isMe = msg.key.fromMe || cleanSenderNumber === cleanEnvNumber;
 
-    // 2. Filter: Only process if there's a number and it's not a short code
-    if (!/\d+/.test(text) || text.length < 3) return;
+        if (!isMe) return;
 
-    try {
-        // AI Call - Ensure parseTransaction handles the WHOLE string at once
-        const result = await parseTransaction(text);
-        if (!result || (Array.isArray(result) && result.length === 0)) return;
-
-        const transactions = Array.isArray(result) ? result : [result];
-        
-        // Use Promise.all to save everything to MongoDB in parallel (Faster)
-        await Promise.all(transactions.map(async (item) => {
-            if (item && !item.error && item.amount > 0) {
-                return new Transaction({
-                    amount: Number(item.amount),
-                    category: (item.category || 'personal').toLowerCase(),
-                    description: item.note || text,
-                    type: (item.type || 'expense').toLowerCase(),
-                    date: new Date()
-                }).save();
-            }
-        }));
-
-        const updated = await getTodayStats();
-        const reply = `✅ *Recorded.*\n\nToday's Total Utilized: *₹${updated.expense}*\nRemaining Balance: *₹${updated.balance}*`;
-        
-        await sock.sendMessage(sender, { text: reply });
-
-    } catch (error: any) {
-        // If Gemini hits a rate limit (429), catch it here
-        if (error.message.includes('429')) {
-            console.error("⚠️ AI Rate Limit Hit");
-            await sock.sendMessage(sender, { text: "⏳ AI is busy. Please wait a minute before logging again." });
-        } else {
-            console.error("❌ Process Error:", error.message);
+        // 3. Mark the message as read immediately so WhatsApp stops retrying it
+        try {
+            await sock.readMessages([msg.key]);
+        } catch (err) {
+            console.error("⚠️ Failed to send read receipt:", err);
         }
-    }
-});
+
+        console.log(`📥 Received: "${text}" | Allowed? ${isMe}`);
+
+        // 1. Status Command
+        if (text.toLowerCase() === '!status') {
+            const { income, expense, balance } = await getTodayStats();
+            await sock.sendMessage(sender, { 
+                text: `📊 *Today's Ledger*\n\n💰 Income: ₹${income}\n💸 Utilized: ₹${expense}\n🏁 Leftover: ₹${balance}` 
+            });
+            return;
+        }
+
+        // 2. Filter: Only continue if the message contains numbers
+        if (!/\d+/.test(text)) return;
+
+        try {
+            console.log(`🧠 Sending text to AI Parser...`);
+            const result = await parseTransaction(text);
+            console.log(`🤖 AI Parsed Output:`, JSON.stringify(result));
+
+            if (!result) return;
+
+            const transactions = Array.isArray(result) ? result : [result];
+            let savedCount = 0;
+            
+            for (const item of transactions) {
+                if (item && !item.error && Number(item.amount) > 0) {
+                    await new Transaction({
+                        amount: Number(item.amount),
+                        category: (item.category || 'personal').toLowerCase(),
+                        description: item.note || text,
+                        type: (item.type || 'expense').toLowerCase(),
+                        date: new Date()
+                    }).save();
+                    savedCount++;
+                }
+            }
+
+            if (savedCount > 0) {
+                const updated = await getTodayStats();
+                const reply = `✅ *Recorded.*\n\nToday's Total Utilized: *₹${updated.expense}*\nRemaining Balance: *₹${updated.balance}*`;
+                await sock.sendMessage(sender, { text: reply });
+            }
+
+        } catch (error: any) {
+            console.error("❌ Process Error:", error.message);
+            if (error.message.includes('503') || error.message.includes('UNAVAILABLE')) {
+                await sock.sendMessage(sender, { 
+                    text: "⏳ Google AI is currently overloaded. Please wait a minute and try that log again!" 
+                });
+            } else {
+                await sock.sendMessage(sender, { text: "❌ Failed to process transaction due to an AI error." });
+            }
+        }
+    });
 }
 
 connectToWhatsapp();

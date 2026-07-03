@@ -24,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^25.6.0",
     "@types/node-cron": "^3.0.11",
+    "@types/qrcode-terminal": "^0.12.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
