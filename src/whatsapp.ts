@@ -41,14 +41,17 @@ export async function connectToWhatsapp() {
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
+  if (type !== 'notify') return;
+  const msg = messages[0];
+  if (!msg?.message || msg.key.remoteJid === 'status@broadcast') return;
 
-    const msg = messages[0];
-    if (!msg?.message || msg.key.remoteJid === 'status@broadcast') return;
+  const messageTimestamp = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
+  if (Date.now() - messageTimestamp > 60000) return;
 
-    const messageTimestamp = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
-    if (Date.now() - messageTimestamp > 60000) return;
-
+  try {
     await handleMessage(sock, msg);
-  });
+  } catch (err) {
+    console.error("❌ Unhandled message error:", err);
+  }
+});
 }

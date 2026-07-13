@@ -33,7 +33,16 @@ export async function handleMessage(
   }
 
   // handle commands first
-  const wasCommand = await handleCommand(sock, sender, text);
+  let wasCommand = false;
+  try {
+    wasCommand = await handleCommand(sock, sender, text);
+  } catch (err) {
+    console.error("❌ Command Error:", err);
+    await sock.sendMessage(sender, {
+      text: "⚠️ Something went wrong running that command."
+    });
+    return;
+  }
   if (wasCommand) return;
 
   // only process if contains numbers
