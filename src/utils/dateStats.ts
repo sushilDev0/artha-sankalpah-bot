@@ -1,5 +1,4 @@
 
-// src/utils/dateStats.ts
 import { Transaction } from '../models/Transaction';
 
 export const TZ = 'Asia/Kolkata';
@@ -24,17 +23,6 @@ export function startOfWeek(d: Date) {
   const diff = day === 0 ? 6 : day - 1;
   x.setDate(x.getDate() - diff);
   return x;
-}
-export function startOfMonth(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-export function startOfYear(d: Date) {
-  return new Date(d.getFullYear(), 0, 1);
-}
-export function isLastDayOfMonth(d: Date) {
-  const test = new Date(d);
-  test.setDate(test.getDate() + 1);
-  return test.getMonth() !== d.getMonth();
 }
 
 export async function getStatsForRange(start: Date, end: Date) {

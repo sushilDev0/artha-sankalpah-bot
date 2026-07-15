@@ -3,7 +3,6 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-// The 2026 SDK uses a unified Client
 const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY!,
 });

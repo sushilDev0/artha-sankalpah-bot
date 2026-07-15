@@ -1,4 +1,3 @@
-// src/handlers/commands.ts
 import { Settings } from '../models/Settings';
 import { WASocket } from '@whiskeysockets/baileys';
 import { getTodayStats } from '../services/stats';

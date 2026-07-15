@@ -1,4 +1,3 @@
-// src/handlers/message.handler.ts
 import { WASocket } from '@whiskeysockets/baileys';
 import { parseTransaction } from '../services/ai';
 import { Transaction } from '../models/Transaction';
