@@ -7,6 +7,7 @@ import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode-terminal';
 import pino from "pino";
 import { handleMessage } from './handlers/message.handler';
+import { startWeeklyReportCron } from './services/weeklyReport';
 
 export async function connectToWhatsapp() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info');
@@ -35,23 +36,29 @@ export async function connectToWhatsapp() {
       }
     } else if (connection === "open") {
       console.log(`\n✅ Artha Sankalpah is linked.`);
+
+      // start weekly report cron
+      startWeeklyReportCron(async (text) => {
+        const myNumber = process.env.MY_NUMBER + '@s.whatsapp.net';
+        await sock.sendMessage(myNumber, { text });
+      });
     }
   });
 
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-  if (type !== 'notify') return;
-  const msg = messages[0];
-  if (!msg?.message || msg.key.remoteJid === 'status@broadcast') return;
+    if (type !== 'notify') return;
+    const msg = messages[0];
+    if (!msg?.message || msg.key.remoteJid === 'status@broadcast') return;
 
-  const messageTimestamp = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
-  if (Date.now() - messageTimestamp > 60000) return;
+    const messageTimestamp = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
+    if (Date.now() - messageTimestamp > 60000) return;
 
-  try {
-    await handleMessage(sock, msg);
-  } catch (err) {
-    console.error("❌ Unhandled message error:", err);
-  }
-});
+    try {
+      await handleMessage(sock, msg);
+    } catch (err) {
+      console.error("❌ Unhandled message error:", err);
+    }
+  });
 }
