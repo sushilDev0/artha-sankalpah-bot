@@ -1,13 +1,23 @@
- ArthaSankalpah whatsapp bot 
+# 💰 ArthaSankalpah
 
+A personal 📱 WhatsApp bot for daily budget tracking and 🤖 AI-powered weekly financial coaching.
 
- Its the extension of the Artha Sankalpah frontend to ease the access to admin to track expenses on web as well as handy plaforms like Whatsapp.
- More features will be Added soon.
+## ✨ Features
 
+- 📝 **Daily Logging:** Record transactions directly through WhatsApp.
+- 📊 **Financial Tracking:** Track income, expenses, and net savings.
+- 💡 **Weekly Coaching:** Receive AI-powered financial insights, spending analysis, and alerts.
 
- TECH STACK: 
+## 🛠️ Tech Stack
 
- 1. Engine: Node/Express
- 2. AI : Google Gemini 1.5 Flash
- 3. Architecture : Atomic Design
- 4. WhatsApp API : Baileys
+- ⚙️ **Backend:** Node.js / Express
+- 🧠 **AI:** Google Gemini 1.5 Flash
+- 🏗️ **Architecture:** Atomic Design
+- 💬 **WhatsApp API:** Baileys
+
+## 🚀 Getting Started
+
+### 📋 Prerequisites
+
+- 🟢 Node.js (v18+)
+- 📱 A WhatsApp account for pairing
