@@ -12,6 +12,7 @@ A personal 📱 WhatsApp bot for daily budget tracking and 🤖 AI-powered weekl
 
 - ⚙️ **Backend:** Node.js / Express
 - 🧠 **AI:** Google Gemini 1.5 Flash
+- 🛢️**Database** MongoDB Atlas
 - 🏗️ **Architecture:** Atomic Design
 - 💬 **WhatsApp API:** Baileys
 
