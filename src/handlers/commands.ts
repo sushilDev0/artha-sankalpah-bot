@@ -111,7 +111,7 @@ export async function handleCommand(
         else if (word === 'type' && (value === 'income' || value === 'expense')) txn.type = value;
         else if (['note', 'desc', 'description'].includes(word)) txn.description = value;
         matched = true;
-        break; // rest consumed as the value
+        break;
       }
       // plain word, not a keyword -> treat as category
       categoryWords.push(word);
