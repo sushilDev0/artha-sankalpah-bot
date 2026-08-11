@@ -1,10 +1,24 @@
 import mongoose from 'mongoose';
 
 const SettingsSchema = new mongoose.Schema({
-  chatId: { type: String, required: true, unique: true },
-  weeklyTime: { type: String, default: null },   // "21:00" 24hr format
+  chatId: { 
+    type: String,
+     required: true,
+      unique: true,
+     index:true},
+  weeklyTime: { 
+    type: String,
+     default: "21:00",
+      validate: {
+      validator: (v: string) => /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v),
+      message: (props: any) => `${props.value} is not a valid time format! Use HH:MM (24hr)`
+    }
+     },   // "21:00" 24hr format
   lastWeeklySent: { type: Date, default: null },
   
 });
+
+SettingsSchema.index({ weeklyTime: 1, weeklyReportEnabled: 1 });
+
 
 export const Settings = mongoose.model('Settings', SettingsSchema);

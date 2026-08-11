@@ -6,8 +6,8 @@ import makeWASocket, {
 import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode-terminal';
 import pino from "pino";
-import { handleMessage } from './handlers/message.handler';
-import { startWeeklyReportCron } from './services/weeklyReport';
+import { handleMessage } from './handlers/message.handler.js';
+import { startWeeklyReportCron } from './services/weeklyReport.js';
 
 export async function connectToWhatsapp() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info');
@@ -16,7 +16,7 @@ export async function connectToWhatsapp() {
   const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: 'silent' }),
+    logger: pino({ level: 'warn' }),
     browser: ["Ubuntu", "Chrome", "20.0.04"]
   });
 

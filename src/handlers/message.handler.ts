@@ -1,8 +1,8 @@
-import { WASocket } from '@whiskeysockets/baileys';
-import { parseTransaction } from '../services/ai';
-import { Transaction } from '../models/Transaction';
-import { getTodayStats } from '../services/stats';
-import { handleCommand } from './commands';
+import makeWASocket, { type WASocket } from '@whiskeysockets/baileys';
+import { parseTransaction } from '../services/ai.js'
+import { Transaction } from '../models/Transaction.js';
+import { getTodayStats } from '../services/stats.js';
+import { handleCommand } from './commands.js';
 
 export async function handleMessage(
   sock: WASocket,
