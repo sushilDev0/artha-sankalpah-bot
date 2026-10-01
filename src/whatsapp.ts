@@ -31,10 +31,9 @@ export async function connectToWhatsapp() {
     const sock = makeWASocket({
       version,
       auth: state,
-      logger: pino({ 
-        level: process.env.NODE_ENV === 'production' ? 'warn' : 'silent' 
-      }),
+      logger: pino({ level: 'info' }), // Set to 'info' to keep logs readable
       browser: ["Artha Sankalpah", "Chrome", "1.0.0"],
+      syncFullHistory: false,          // 🔑 Disables initial chat history sync delay
       connectTimeoutMs: 60_000,       // 60 second timeout
       keepAliveIntervalMs: 30_000     // Ping every 30 seconds
     });
@@ -111,27 +110,31 @@ export async function connectToWhatsapp() {
       if (!msg?.message) return;
       if (msg.key.remoteJid === 'status@broadcast') return;
 
-      // Ignore messages older than 60 seconds
+      // Allow 120s buffer window for delayed messages
       const messageTimestamp = msg.messageTimestamp 
         ? Number(msg.messageTimestamp) * 1000 
         : Date.now();
-      if (Date.now() - messageTimestamp > 60000) return;
+      if (Date.now() - messageTimestamp > 120000) return;
 
-      // Ignore own messages
-      if (msg.key.fromMe) return;
+      // 🔑 IMPORTANT: Commented out during local testing so you can send messages to yourself.
+      // Uncomment this line in production mode when deploying for other users:
+      // if (msg.key.fromMe) return;
 
       try {
         await handleMessage(sock, msg);
       } catch (err) {
         console.error("❌ Message handler error:", err);
         
-        // Send error message to user
-        try {
-          await sock.sendMessage(msg.key.remoteJid!, { 
-            text: '❌ Sorry, something went wrong. Please try again.' 
-          });
-        } catch (sendErr) {
-          console.error('Failed to send error message:', sendErr);
+        // Target participant or remoteJid accurately
+        const targetJid = msg.key.participant || msg.key.remoteJid;
+        if (targetJid) {
+          try {
+            await sock.sendMessage(targetJid, { 
+              text: '❌ Sorry, something went wrong. Please try again.' 
+            });
+          } catch (sendErr) {
+            console.error('Failed to send error message:', sendErr);
+          }
         }
       }
     });
