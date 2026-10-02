@@ -7,7 +7,7 @@ const TransactionSchema = new mongoose.Schema({
     required: [true, 'chatId is required'],
     index: true,
     validate: {
-      validator: (v: string) => v.includes('@s.whatsapp.net'),
+      validator: (v: string) => /^\d+(?::\d+)?@(s\.whatsapp\.net|lid)$/.test(v),
       message: 'Invalid WhatsApp JID format'
     }
   },

@@ -1,4 +1,4 @@
 node_modules/
 .env
-auth_info/baileys
+auth_info/
 dist/
