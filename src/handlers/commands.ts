@@ -51,17 +51,17 @@ function formatDate(date: Date): string {
 
 async function handleGreeting(sock: WASocket, sender: string): Promise<void> {
   await sendReply(sock, sender,
-    '👋 *Welcome to Artha Sankalpah Bot*\n\n' +
-    'Your personal bookkeeper and budgeting coach.\n\n' +
-    '📝 *Quick Start:*\n' +
-    '• `food 300` → Log expense\n' +
-    '• `salary 50000 income` → Log income\n' +
-    '• `!help` → All commands\n\n' +
-    '💡 *Pro tip:* Add notes like `food 300 swiggy biryani`'
+    '✨ *Welcome to Artha Sankalpah*\n' +
+    '_Track expenses instantly, right inside WhatsApp._\n\n' +
+    '💡 *Just type & send:*\n' +
+    '• `metro 50`\n' +
+    '• `groceries 1200 blinkit`\n' +
+    '• `freelance 15000 income`\n\n' +
+    '📲 *Need a report?*\n' +
+    'Send `!status` for today\'s summary or `!export` for your Excel sheet.\n\n' +
+    '💡 Send `!help` anytime for commands.'
   );
 }
-
-
 async function handleExport(sock: WASocket, sender: string): Promise<void> {
   try {
     const csvData = await generateCsvExport(sender);
