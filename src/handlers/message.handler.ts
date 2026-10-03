@@ -31,7 +31,7 @@ function extractText(msg: any): string {
 
 function isOwner(msg: any, sender: string): boolean {
   const cleanEnvNumber = (process.env.MY_NUMBER || '').replace(/\D/g, '');
-  const cleanSenderNumber = sender.split('@')[0].split(':')[0].replace(/\D/g, '');
+const cleanSenderNumber = sender.replace(/[:@].*/, '').replace(/\D/g, '');
   return msg.key.fromMe || cleanSenderNumber === cleanEnvNumber;
 }
 

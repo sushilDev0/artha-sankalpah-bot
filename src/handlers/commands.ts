@@ -1,7 +1,7 @@
 import type { WASocket } from '@whiskeysockets/baileys';
 import { getTodayStats } from '../services/stats.js';
 import { Transaction } from '../models/Transaction.js';
-
+import { generateCsvExport } from '../services/csv.js';
 // ============================================================
 // VALIDATION
 // ============================================================
@@ -61,6 +61,31 @@ async function handleGreeting(sock: WASocket, sender: string): Promise<void> {
   );
 }
 
+
+async function handleExport(sock: WASocket, sender: string): Promise<void> {
+  try {
+    const csvData = await generateCsvExport(sender);
+
+    if (!csvData) {
+      await sendReply(sock, sender, '📝 No transactions found to export.');
+      return;
+    }
+
+    const buffer = Buffer.from(csvData, 'utf-8');
+    const fileName = `Artha_Sankalpah_Ledger_${new Date().toISOString().split('T')[0]}.csv`;
+
+    await sock.sendMessage(formatJid(sender), {
+      document: buffer,
+      fileName,
+      mimetype: 'text/csv',
+      caption: '📊 Here is your exported transaction ledger in CSV format.'
+    });
+  } catch (error) {
+    console.error('Export command error:', error);
+    await sendReply(sock, sender, '❌ Failed to generate CSV export.');
+  }
+}
+
 async function handleHelp(sock: WASocket, sender: string): Promise<void> {
   await sendReply(sock, sender,
     '📚 *Available Commands*\n\n' +
@@ -75,7 +100,11 @@ async function handleHelp(sock: WASocket, sender: string): Promise<void> {
     '✏️ *Editing*\n' +
     '• `edit food 300` → Edit last entry\n' +
     '• `edit 2 food 300` → Edit specific #\n' +
-    '• `delete 2` → Remove transaction'
+    '• `delete 2` → Remove transaction \n' +
+    '• `!export` → Export CSV\n\n' +
+    '💡 *Tips:*\n' +
+    '• Commands are case-insensitive\n' +
+    '• Use `!help` anytime for this guide'
   );
 }
 
@@ -318,6 +347,11 @@ export async function handleCommand(
   // Delete
   if (['delete', 'del', 'remove'].includes(rawParts[0]?.toLowerCase()!) && rawParts[1]) {
     await handleDelete(sock, sender, rawParts);
+    return true;
+  }
+
+  if (normalized === '!export' || normalized === '!csv') {
+    await handleExport(sock, sender);
     return true;
   }
 
