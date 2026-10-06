@@ -23,6 +23,36 @@ let healthTimer: ReturnType<typeof setInterval> | undefined;
 let currentSock: ReturnType<typeof makeWASocket> | undefined;
 
 // ============================================================
+// ACCESS CONTROL: only talk to the owner
+// ============================================================
+
+// Strips the ":device" part, e.g. 9198...:12@s.whatsapp.net -> 9198...@s.whatsapp.net
+const bareJid = (jid?: string | null) => (jid || '').replace(/:\d+(?=@)/, '').toLowerCase();
+const jidDigits = (jid?: string | null) => (jid || '').split('@')[0]!.split(':')[0]!.replace(/\D/g, '');
+
+// Allowed: your own "message yourself" chat, or a 1-to-1 chat with MY_NUMBER.
+// Everything else (friends, groups, broadcasts) is ignored.
+// Set ALLOW_ALL_CHATS=true only if you deliberately want a public multi-user bot.
+export function isAllowedChat(sock: { user?: any }, msg: any): boolean {
+  if (process.env.ALLOW_ALL_CHATS === 'true') return true;
+
+  const jid: string | null | undefined = msg?.key?.remoteJid;
+  if (!jid) return false;
+  if (jid.endsWith('@g.us') || jid.endsWith('@broadcast') || jid.endsWith('@newsletter')) return false;
+
+  // 1) Self-chat: the chat is with my own account (phone JID or LID)
+  const mine = [bareJid(sock.user?.id), bareJid(sock.user?.lid)].filter(Boolean);
+  if (mine.includes(bareJid(jid))) return true;
+
+  // 2) Optional: owner messaging from another number (MY_NUMBER)
+  const owner = (process.env.MY_NUMBER || '').replace(/\D/g, '');
+  if (!owner) return false;
+  if (msg.key.fromMe) return false; // something I typed to someone else from my phone
+  const alt: string | undefined = msg.key.remoteJidAlt;
+  return jidDigits(jid) === owner || (alt ? jidDigits(alt) === owner : false);
+}
+
+// ============================================================
 // MAIN CONNECTION FUNCTION
 // ============================================================
 
@@ -123,8 +153,10 @@ export async function connectToWhatsapp(): Promise<ReturnType<typeof makeWASocke
         if (!msg?.message) continue;
         if (msg.key.remoteJid === 'status@broadcast') continue;
 
-        // Debug logging to verify incoming payload
-        console.log('📩 Incoming message from:', msg.key.remoteJid);
+        // Ignore everyone except the owner (checked before logging, so other chats never hit the logs)
+        if (!isAllowedChat(sock, msg)) continue;
+
+        console.log('📩 Incoming message (owner chat)');
 
         // Allow 120s buffer window for delayed messages
         const messageTimestamp = msg.messageTimestamp
