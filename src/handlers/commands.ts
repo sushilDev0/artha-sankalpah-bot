@@ -2,6 +2,7 @@ import type { WASocket } from '@whiskeysockets/baileys';
 import { getTodayStats } from '../services/stats.js';
 import { Transaction } from '../models/Transaction.js';
 import { generateCsvExport } from '../services/csv.js';
+import { sendManualWeeklyReport } from '../services/weeklyReport.js';
 // ============================================================
 // VALIDATION
 // ============================================================
