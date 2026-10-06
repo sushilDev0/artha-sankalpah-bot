@@ -338,6 +338,14 @@ export async function handleCommand(
     return true;
   }
 
+  // Inside handleCommand function:
+if (normalized === '!testreport') {
+  await sendManualWeeklyReport(sender, async (jid, text) => {
+    await sock.sendMessage(jid, { text });
+  });
+  return true;
+}
+
   // Edit
   if (['edit', 'update', 'change'].includes(rawParts[0]?.toLowerCase()!) && rawParts.length > 1) {
     await handleEdit(sock, sender, rawParts);

@@ -110,12 +110,17 @@ async function generateWeeklyReport(chatId: string): Promise<string> {
 
 async function getReportRecipients(): Promise<string[]> {
   try {
-    // Get settings for users with weekly reports enabled
-    const settings = await Settings.find({
-      weeklyReportEnabled: { $ne: false }  // Not disabled
-    });
+    // 1. Get users from Settings who haven't explicitly disabled reports
+    const settings = await Settings.find({ weeklyReportEnabled: { $ne: false } });
+    const settingsJids = settings.map(s => s.chatId);
 
-    return settings.map(s => s.chatId);
+    // 2. Get distinct chatIds from Transactions (for active users without a Settings doc yet)
+    const activeTxnJids = await Transaction.distinct('chatId');
+
+    // 3. Combine and deduplicate
+    const allJids = Array.from(new Set([...settingsJids, ...activeTxnJids]));
+
+    return allJids;
   } catch (error) {
     console.error('getReportRecipients error:', error);
     return [];
