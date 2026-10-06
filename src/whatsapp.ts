@@ -1,11 +1,12 @@
 import makeWASocket, {
   DisconnectReason,
-  useMultiFileAuthState,
   fetchLatestBaileysVersion
 } from "@whiskeysockets/baileys";
 import { Boom } from '@hapi/boom';
+import mongoose from 'mongoose';
 import qrcode from 'qrcode-terminal';
 import pino from "pino";
+import { useMongoAuthState } from './config/mongoAuthState.js';
 import { handleMessage } from './handlers/message.handler.js';
 import { startWeeklyReportCron } from './services/weeklyReport.js';
 
@@ -16,14 +17,18 @@ import { startWeeklyReportCron } from './services/weeklyReport.js';
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 let cronInitialized = false;
+let healthTimer: ReturnType<typeof setInterval> | undefined;
+
+// Always points at the newest socket, so the weekly cron keeps working after reconnects
+let currentSock: ReturnType<typeof makeWASocket> | undefined;
 
 // ============================================================
 // MAIN CONNECTION FUNCTION
 // ============================================================
 
-export async function connectToWhatsapp() {
+export async function connectToWhatsapp(): Promise<ReturnType<typeof makeWASocket> | undefined> {
   try {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+    const { state, saveCreds } = await useMongoAuthState();
     const { version, isLatest } = await fetchLatestBaileysVersion();
 
     console.log(`📱 Using WhatsApp v${version.join('.')} ${isLatest ? '(latest)' : '(update available)'}`);
@@ -31,19 +36,20 @@ export async function connectToWhatsapp() {
     const sock = makeWASocket({
       version,
       auth: state,
-      logger: pino({ level: 'info' }),
+      logger: pino({ level: 'warn' }),
       browser: ["Artha Sankalpah", "Chrome", "1.0.0"],
       syncFullHistory: false,          // 🔑 Disables initial chat history sync delay
       connectTimeoutMs: 60_000,       // 60 second timeout
       keepAliveIntervalMs: 30_000,    // Ping every 30 seconds
       markOnlineOnConnect: true,
     });
+    currentSock = sock;
 
     // ============================================================
     // CONNECTION EVENT HANDLER
     // ============================================================
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       // Show QR code for initial linking
@@ -57,9 +63,14 @@ export async function connectToWhatsapp() {
         const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-        // User deliberately logged out
+        // User logged out from the phone: clear the saved session so a fresh QR is shown
         if (statusCode === DisconnectReason.loggedOut) {
-          console.log('👋 Logged out. Delete auth_info folder to re-link.');
+          console.log('👋 Logged out. Clearing saved session, restarting for a new QR...');
+          try {
+            await mongoose.connection.collection('baileysauths').deleteMany({});
+          } catch (err) {
+            console.error('Failed to clear saved session:', err);
+          }
           process.exit(0);
         }
 
@@ -73,7 +84,7 @@ export async function connectToWhatsapp() {
           console.error('❌ Max reconnection attempts reached. Restarting...');
           process.exit(1);
         }
-      } 
+      }
       // Successful connection
       else if (connection === "open") {
         reconnectAttempts = 0;
@@ -84,7 +95,8 @@ export async function connectToWhatsapp() {
           cronInitialized = true;
           startWeeklyReportCron(async (jid: string, text: string) => {
             try {
-              await sock.sendMessage(jid, { text });
+              // Use the latest socket, not the one from the first connection
+              await currentSock?.sendMessage(jid, { text });
             } catch (err) {
               console.error('❌ Failed to send weekly report:', err);
             }
@@ -115,8 +127,8 @@ export async function connectToWhatsapp() {
         console.log('📩 Incoming message from:', msg.key.remoteJid);
 
         // Allow 120s buffer window for delayed messages
-        const messageTimestamp = msg.messageTimestamp 
-          ? Number(msg.messageTimestamp) * 1000 
+        const messageTimestamp = msg.messageTimestamp
+          ? Number(msg.messageTimestamp) * 1000
           : Date.now();
         if (Date.now() - messageTimestamp > 120000) continue;
 
@@ -127,12 +139,12 @@ export async function connectToWhatsapp() {
           await handleMessage(sock, msg);
         } catch (err) {
           console.error("❌ Message handler error:", err);
-          
+
           const targetJid = msg.key.participant || msg.key.remoteJid;
           if (targetJid) {
             try {
-              await sock.sendMessage(targetJid, { 
-                text: '❌ Sorry, something went wrong. Please try again.' 
+              await sock.sendMessage(targetJid, {
+                text: '❌ Sorry, something went wrong. Please try again.'
               });
             } catch (sendErr) {
               console.error('Failed to send error message:', sendErr);
@@ -146,11 +158,13 @@ export async function connectToWhatsapp() {
     // HEALTH CHECK (Every 5 minutes)
     // ============================================================
 
-    setInterval(() => {
+    // Clear the previous timer so reconnects don't stack up intervals
+    if (healthTimer) clearInterval(healthTimer);
+    healthTimer = setInterval(() => {
       if (sock.user) {
         console.log('💓 Bot is alive');
       } else {
-        console.warn('⚠️️ Connection may be dead');
+        console.warn('⚠️ Connection may be dead');
       }
     }, 300000);
 
