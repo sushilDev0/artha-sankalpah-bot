@@ -238,8 +238,7 @@ artha-sankalpah/
 - [ ] Recurring transactions (rent, subscriptions)
 - [ ] delete existing entries ('delete')
 - [ ] Edit existing entries (`!edit`)
-- [ ] Voice-note expense logging
-- [ ] Charts/graphs in weekly reports
+
 
 ---
 
