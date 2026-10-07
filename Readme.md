@@ -106,6 +106,9 @@ MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/artha_sankal
 # Google Gemini API Key
 GEMINI_API_KEY=your_gemini_api_key_here
 
+#Phone number
+MY_NUMBER=your_phone_number
+
 # Timezone Configuration
 TZ=Asia/Kolkata
 
@@ -155,7 +158,7 @@ Message the bot's WhatsApp number using plain everyday text:
 | Log Expense | `chai 20` or `petrol 500` | Saves the item, auto-categorizes via AI, confirms the amount |
 | Log Income | `salary 50000` | Records the income transaction to your balance |
 | Check Stats | `!stats` | Generates a real-time monthly spending breakdown |
-| Export Data | `!csv` | Generates and sends a downloadable CSV file in the chat |
+| Export Data | `!export` | Generates and sends a downloadable CSV file in the chat |
 | Delete Last | `!delete` | Removes your most recent entry |
 | Help | `!help` | Lists available features and instructions |
 
