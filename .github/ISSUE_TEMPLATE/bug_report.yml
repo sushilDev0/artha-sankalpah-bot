@@ -1,0 +1,29 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Messages you sent to the bot, commands, etc.
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Node version, OS, hosting (local / Render / Railway ...)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste relevant logs. Remove API keys, phone numbers, and connection strings first.
+      render: shell
