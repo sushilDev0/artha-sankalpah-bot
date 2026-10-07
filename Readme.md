@@ -2,11 +2,13 @@
 
 > **AI-Powered WhatsApp Personal Expense & Financial Health Tracker**
 
-![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb&logoColor=white)
 ![Gemini](https://img.shields.io/badge/AI-Google%20Gemini-4285F4?logo=google&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
+![CI](https://github.com/sushilDev0/artha-sankalpah-bot/actions/workflows/ci.yml/badge.svg)
 
 Artha Sankalpah is a lightweight, backend-first, multi-tenant WhatsApp bot that simplifies expense tracking, income logging, and personal budgeting. Built with **Node.js, TypeScript, the WhatsApp Web API (Baileys), MongoDB Atlas, and Google Gemini AI**, it lets you manage your finances directly through simple WhatsApp messages — no extra apps, no complex dashboards.
 
@@ -43,7 +45,7 @@ Artha Sankalpah is a lightweight, backend-first, multi-tenant WhatsApp bot that 
 
 | Layer | Technology |
 | --- | --- |
-| Runtime & Language | Node.js (v18+) with TypeScript |
+| Runtime & Language | Node.js (v20+) with TypeScript |
 | WhatsApp Gateway | [`@whiskeysockets/baileys`](https://github.com/WhiskeySockets/Baileys) |
 | Database & ODM | MongoDB Atlas via Mongoose |
 | AI Engine | [`@google/genai`](https://www.npmjs.com/package/@google/genai) (Google Gemini Flash API) |
@@ -71,7 +73,7 @@ Run your own personal instance of Artha Sankalpah locally or on a server.
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) v18 or higher
+- [Node.js](https://nodejs.org/) v20 or higher
 - A [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) account (or a local MongoDB instance)
 - A [Google AI Studio](https://aistudio.google.com/) Gemini API key (free tier available)
 - A WhatsApp account on a phone that can scan a QR code
@@ -79,8 +81,8 @@ Run your own personal instance of Artha Sankalpah locally or on a server.
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/artha-sankalpah.git
-cd artha-sankalpah
+git clone https://github.com/sushilDev0/artha-sankalpah-bot.git
+cd artha-sankalpah-bot
 ```
 
 ### Step 2: Install Dependencies
@@ -100,27 +102,32 @@ cp .env.example .env
 Open `.env` and fill in your credentials:
 
 ```env
-# MongoDB Connection String
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/artha_sankalpah?retryWrites=true&w=majority
+# MongoDB connection string
+MONGO_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/artha_sankalpah?retryWrites=true&w=majority
 
-# Google Gemini API Key
+# Google Gemini API key
 GEMINI_API_KEY=your_gemini_api_key_here
 
-#Phone number
-MY_NUMBER=your_phone_number
+# Optional: your number with country code, digits only
+MY_NUMBER=919876543210
 
-# Timezone Configuration
+# Optional: public multi-user mode (off by default)
+ALLOW_ALL_CHATS=false
+
+# Timezone for the scheduler
 TZ=Asia/Kolkata
 
-# Server Port (Optional)
+# Port for the health endpoint
 PORT=3000
 ```
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `MONGODB_URI` | ✅ | MongoDB connection string |
+| `MONGO_URI` | ✅ | MongoDB connection string (also stores the WhatsApp session) |
 | `GEMINI_API_KEY` | ✅ | API key from Google AI Studio |
-| `TZ` | ✅ | Timezone used by the scheduler (default `Asia/Kolkata`) |
+| `MY_NUMBER` | ❌ | Your number (digits only). Lets you message the bot from that number as well as your self-chat |
+| `ALLOW_ALL_CHATS` | ❌ | `true` makes the bot answer anyone who messages the linked number. Default `false` (owner only) |
+| `TZ` | ❌ | Timezone used by the scheduler (default `Asia/Kolkata`) |
 | `PORT` | ❌ | HTTP port for the health endpoint (default `3000`) |
 
 ### Step 4: Run the Application
@@ -151,16 +158,19 @@ Once authenticated, the bot is active and listening for incoming messages. 🎉
 
 ## 📱 How to Use (Commands)
 
-Message the bot's WhatsApp number using plain everyday text:
+By default the bot answers only your own "message yourself" chat (and `MY_NUMBER` if set). Send plain everyday text:
 
-| Action | Example Command | Bot Reaction |
+| Action | Example | What happens |
 | --- | --- | --- |
-| Log Expense | `chai 20` or `petrol 500` | Saves the item, auto-categorizes via AI, confirms the amount |
-| Log Income | `salary 50000` | Records the income transaction to your balance |
-| Check Stats | `!stats` | Generates a real-time monthly spending breakdown |
-| Export Data | `!export` | Generates and sends a downloadable CSV file in the chat |
-| Delete Last | `!delete` | Removes your most recent entry |
-| Help | `!help` | Lists available features and instructions |
+| Log expense | `chai 20`, `groceries 1200 blinkit` | Saves it and auto-categorizes via AI |
+| Log income | `freelance 15000 income` | Records income to your balance |
+| Today's summary | `!status` (or `!today`) | Summary of today's activity |
+| Recent entries | `!last` (or `!recent`) | Shows your latest transactions |
+| Edit an entry | `edit ...` (or `update`, `change`) | Changes an existing entry |
+| Delete an entry | `delete <n>` (or `del`, `remove`) | Removes an entry |
+| Export data | `!export` (or `!csv`) | Sends your history as a CSV file |
+| Test weekly report | `!testreport` | Sends the weekly report now (for testing) |
+| Help | `!help` (or `!commands`) | Lists commands |
 
 **Weekly report:** Every Sunday at 9:00 PM IST the bot automatically sends a spending summary with AI-generated coaching insights.
 
@@ -170,10 +180,10 @@ Message the bot's WhatsApp number using plain everyday text:
 
 To keep Artha Sankalpah running 24/7 in the cloud at (near) zero cost:
 
-1. **Push code to GitHub.** Make sure your secret `.env` file and the `/auth_info_baileys/` folder are listed in `.gitignore`.
+1. **Push code to GitHub.** Make sure your secret `.env` file and the `auth_info/` folder are listed in `.gitignore`.
 2. **Create a web service.** Connect your repository to Render, Railway, or Koyeb.
-3. **Configure environment variables.** Add `MONGODB_URI`, `GEMINI_API_KEY`, and `TZ=Asia/Kolkata` in the service's Environment Variables / Settings dashboard.
-4. **Persist the Baileys session.** Store session state in MongoDB or on a persistent disk volume so redeployments don't log the WhatsApp socket out.
+3. **Configure environment variables.** Add `MONGO_URI`, `GEMINI_API_KEY`, `MY_NUMBER`, and `TZ=Asia/Kolkata` in the service's Environment Variables / Settings dashboard.
+4. **Session persistence.** The WhatsApp session is stored in MongoDB (`src/config/mongoAuthState.ts`), so redeploys don't log you out.
 5. **Keep-alive (UptimeRobot).** Set up a free ping check on a health endpoint (e.g., `/health`) to keep free-tier containers awake.
 
 **Build & start commands**
@@ -190,21 +200,20 @@ npm start
 
 ## 📂 Project Structure
 
-> Illustrative layout — adjust to match your repository.
-
 ```
-artha-sankalpah/
+artha-sankalpah-bot/
 ├── src/
-│   ├── index.ts          # App entry point (server + bot bootstrap)
-│   ├── bot/              # Baileys socket, message handlers, command parser
-│   ├── services/         # Gemini categorization, reports, CSV export
-│   ├── models/           # Mongoose schemas (Transaction, User)
-│   ├── jobs/             # node-cron scheduled jobs (weekly report)
-│   └── utils/            # Helpers (parsing, formatting)
+│   ├── index.ts              # Entry point (health server + bot bootstrap)
+│   ├── whatsapp.ts           # Baileys socket and chat access rules
+│   ├── config/               # db.ts, dns.ts, mongoAuthState.ts (session in MongoDB)
+│   ├── handlers/             # commands.ts, message.handler.ts
+│   ├── services/             # ai.ts (Gemini), csv.ts, stats.ts, weeklyReport.ts
+│   ├── models/               # Mongoose: Transaction, Settings
+│   └── utils/                # dateStats.ts
+├── .github/                  # CI, issue and PR templates
 ├── .env.example
-├── .gitignore
-├── package.json
-├── tsconfig.json
+├── CONTRIBUTING.md
+├── LICENSE
 └── README.md
 ```
 
@@ -214,6 +223,7 @@ artha-sankalpah/
 
 - **No secrets in code** — credentials and connection strings are injected strictly via environment variables.
 - **Isolated user storage** — all transaction queries are strictly scoped by the sender's unique `chatId`.
+- **Owner-only by default** — the bot answers only your self-chat (and `MY_NUMBER`) unless you set `ALLOW_ALL_CHATS=true`.
 - **Git hygiene** — auth keys, database tokens, and session folders are excluded via `.gitignore`.
 - **Data sharing note** — expense descriptions are sent to the Google Gemini API for categorization and insights. Avoid logging sensitive personal details in descriptions.
 
@@ -225,8 +235,8 @@ artha-sankalpah/
 
 | Problem | Likely Fix |
 | --- | --- |
-| QR code doesn't appear | Delete the `auth_info_baileys/` folder and restart the app |
-| Bot logs out after every deploy | Persist the session in MongoDB or on a persistent volume |
+| QR code doesn't appear | Clear the stored session (delete the session collection in MongoDB or the local `auth_info/` folder) and restart |
+| Bot logs out after every deploy | Make sure `MONGO_URI` is set; the session is stored there |
 | Weekly report arrives at the wrong time | Confirm `TZ=Asia/Kolkata` is set in your environment |
 | MongoDB connection fails | Whitelist your server's IP in Atlas **Network Access** and verify credentials |
 | AI categorization fails | Check `GEMINI_API_KEY`, quota limits, and the configured model name |
@@ -239,21 +249,24 @@ artha-sankalpah/
 - [ ] Monthly budgets with overspend alerts
 - [ ] Custom categories and category overrides
 - [ ] Recurring transactions (rent, subscriptions)
-- [ ] delete existing entries ('delete')
-- [ ] Edit existing entries (`!edit`)
+- [ ] REST API layer
+- [ ] React dashboard
+- [ ] Telegram and Discord support (shared core logic)
+- [ ] Docker support and automated tests
+
+See the [open issues](https://github.com/sushilDev0/artha-sankalpah-bot/issues) for tasks you can pick up.
 
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome!
+Contributions are welcome, from first-timers too! Read [CONTRIBUTING.md](CONTRIBUTING.md), then pick an issue labelled [`good first issue`](https://github.com/sushilDev0/artha-sankalpah-bot/labels/good%20first%20issue).
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m "Add amazing feature"`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
+2. Create a branch: `git checkout -b feat/amazing-feature`
+3. Commit your changes and run `npm run build`
+4. Push and open a Pull Request
 
 ---
 

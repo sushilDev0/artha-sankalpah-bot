@@ -2,15 +2,25 @@
   "name": "artha-sankalpah-bot",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "whatsapp-bot",
+    "expense-tracker",
+    "typescript",
+    "nodejs",
+    "mongodb",
+    "gemini-ai",
+    "baileys",
+    "open-source",
+    "self-hosted"
+  ],
+  "author": "sushilDev0",
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "@google/genai": "^1.50.1",
@@ -28,5 +38,16 @@
     "@types/qrcode-terminal": "^0.12.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sushilDev0/artha-sankalpah-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sushilDev0/artha-sankalpah-bot/issues"
+  },
+  "homepage": "https://github.com/sushilDev0/artha-sankalpah-bot#readme",
+  "engines": {
+    "node": ">=20"
   }
 }
